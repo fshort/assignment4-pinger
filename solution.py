@@ -59,7 +59,7 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
             delay = round((timeReceived - origTime)*1000, 7)
 
             print("Reply from " + str(destAddr) + ": bytes=" + str(size) + " time=" + str(delay) + "ms TTL=" + str(ttl))
-            return 0
+            return delay
         
         # Fill in end
         timeLeft = timeLeft - howLongInSelect
@@ -140,12 +140,12 @@ def ping(host, timeout=1):
     stdev_var = stdev(delays)
 
     vars = [str(round(packet_min, 2)), str(round(packet_avg, 2)), str(round(packet_max, 2)),str(round(stdev_var, 2))]
-    print("round-trip min/avg/max/stddev = " + "/".join(vars) + " ms")
-
+    
     return vars
 
 if __name__ == '__main__':
-    dest0 = "127.0.0.1"
+    dest0 = "74.6.231.21"
     dest1 = "no.no.e"
     dest2 = "google.co.il"
-    ping(dest2)
+    vars = ping(dest0)
+    print("round-trip min/avg/max/stddev = " + "/".join(vars) + " ms")
