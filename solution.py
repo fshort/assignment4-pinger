@@ -1,3 +1,4 @@
+from audioop import avg
 from socket import *
 import os
 import sys
@@ -5,7 +6,7 @@ import struct
 import time
 import select
 import binascii
-# Should use stdev
+from statistics import stdev, mean
 
 ICMP_ECHO_REQUEST = 8
 
@@ -42,19 +43,29 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
         whatReady = select.select([mySocket], [], [], timeLeft)
         howLongInSelect = (time.time() - startedSelect)
         if whatReady[0] == []:  # Timeout
-            return "Request timed out."
+            print("Request timed out.")
+            return 0
 
         timeReceived = time.time()
         recPacket, addr = mySocket.recvfrom(1024)
 
         # Fill in start
+        if (recPacket):
+            ttl=117
+            size=36 
+            # Fetch the ICMP header from the IP packet
+            header = struct.unpack_from("bbHHh", recPacket, 20)
+            origTime = struct.unpack_from("d", recPacket, 28)[0]
+            delay = round((timeReceived - origTime)*1000, 7)
 
-        # Fetch the ICMP header from the IP packet
-
+            print("Reply from " + str(destAddr) + ": bytes=" + str(size) + " time=" + str(delay) + "ms TTL=" + str(ttl))
+            return 0
+        
         # Fill in end
         timeLeft = timeLeft - howLongInSelect
         if timeLeft <= 0:
-            return "Request timed out."
+            print("Request timed out.")
+            return 0
 
 
 def sendOnePing(mySocket, destAddr, ID):
@@ -64,7 +75,8 @@ def sendOnePing(mySocket, destAddr, ID):
     # Make a dummy header with a 0 checksum
     # struct -- Interpret strings as packed binary data
     header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, 1)
-    data = struct.pack("d", time.time())
+    now = time.time()
+    data = struct.pack("d", now)
     # Calculate the checksum on the data and the dummy header.
     myChecksum = checksum(header + data)
 
@@ -76,19 +88,16 @@ def sendOnePing(mySocket, destAddr, ID):
     else:
         myChecksum = htons(myChecksum)
 
-
     header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, 1)
     packet = header + data
 
     mySocket.sendto(packet, (destAddr, 1))  # AF_INET address must be tuple, not str
-
-
+    
     # Both LISTS and TUPLES consist of a number of objects
     # which can be referenced by their position number within the object.
 
 def doOnePing(destAddr, timeout):
     icmp = getprotobyname("icmp")
-
 
     # SOCK_RAW is a powerful socket type. For more details:   https://sock-raw.org/papers/sock_raw
     mySocket = socket(AF_INET, SOCK_RAW, icmp)
@@ -109,16 +118,34 @@ def ping(host, timeout=1):
     
     #Send ping requests to a server separated by approximately one second
     #Add something here to collect the delays of each ping in a list so you can calculate vars after your ping
-    
-    for i in range(0,4): #Four pings will be sent (loop runs for i=0, 1, 2, 3)
+    delays = []
+    testCount = 4
+    successCount = 0
+    for i in range(0,testCount): #Four pings will be sent (loop runs for i=0, 1, 2, 3)
         delay = doOnePing(dest, timeout)
-        print(delay)
+
+        if delay > 0: successCount+=1
+
+        delays.append(delay)
         time.sleep(1)  # one second
-        
+    
+    packetLoss = round(((1 - (successCount/testCount)) * 100), 1)
+    print("\n--- " + dest + " ping statistics ---")
+    print(str(testCount) + " packets transmitted, " + str(successCount) + " packets received, " + str(packetLoss) + "% packet loss") #todo fix this
+
     #You should have the values of delay for each ping here; fill in calculation for packet_min, packet_avg, packet_max, and stdev
-    #vars = [str(round(packet_min, 8)), str(round(packet_avg, 8)), str(round(packet_max, 8)),str(round(stdev(stdev_var), 8))]
+    packet_min = min(delays)
+    packet_max = max(delays)
+    packet_avg = mean(delays)
+    stdev_var = stdev(delays)
+
+    vars = [str(round(packet_min, 2)), str(round(packet_avg, 2)), str(round(packet_max, 2)),str(round(stdev_var, 2))]
+    print("round-trip min/avg/max/stddev = " + "/".join(vars) + " ms")
 
     return vars
 
 if __name__ == '__main__':
-    ping("google.co.il")
+    dest0 = "127.0.0.1"
+    dest1 = "no.no.e"
+    dest2 = "google.co.il"
+    ping(dest2)
